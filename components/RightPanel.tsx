@@ -359,6 +359,7 @@ export const RightPanel = memo(function RightPanel({
               sourceSessionId={sourceSessionId}
               refreshKey={explorerRefreshKey}
               onOpenFile={openWorkspaceFileDiff}
+              onAtMention={onAtMention}
               onRefreshDone={onExplorerRefreshDone}
             />
           ) : (

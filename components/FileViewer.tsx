@@ -810,6 +810,11 @@ function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, on
   const { t } = useI18n();
   const { isDark } = useTheme();
   const [data, setData] = useState<FileData | null>(null);
+  // What the view already shows, for deciding whether a watch frame really
+  // changed it (every new watch epoch reports the current size).
+  const dataRef = useRef<FileData | null>(null);
+  const initialLoadingRef = useRef(false);
+  const loadedKeyRef = useRef<string | null>(null);
   const [gitDiff, setGitDiff] = useState<GitFileDiffResponse | null>(null);
   // A diff request finished (with or without a diff). Until then a requested
   // "diff" mode must not be forced back to source.
@@ -869,6 +874,7 @@ function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, on
         }
         setError(null);
         setData(d);
+        dataRef.current = d;
         return d;
       })
       .catch((e) => {
@@ -917,13 +923,19 @@ function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, on
     setLanguageOverride(null);
   }, [filePath]);
 
-  // Initial load per file. Deliberately independent of `active`: a resident
-  // tab that is only hidden keeps its rendered content (and scroll) instead of
-  // flashing a reload every time the user comes back to it.
+  // Initial load: only the active tab fetches, and only once. A resident tab
+  // that is merely hidden keeps its rendered content (and scroll), so coming
+  // back never flashes a reload; missed changes arrive through the watch.
   useEffect(() => {
+    if (!active) return;
+    const key = `${hostId}\0${filePath}\0${sourceSessionId ?? ""}`;
+    if (loadedKeyRef.current === key) return;
+    loadedKeyRef.current = key;
+    initialLoadingRef.current = true;
     setLoading(true);
     setError(null);
     setData(null);
+    dataRef.current = null;
     setGitDiff(null);
     setDiffChecked(false);
     if (controlledModeRef.current === undefined) setInternalMode("source");
@@ -941,15 +953,17 @@ function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, on
         else if (controlledModeRef.current === "source") setDisplayModeRef.current("preview");
       }
     }).finally(() => {
+      initialLoadingRef.current = false;
       if (!cancelled) setLoading(false);
     });
 
     return () => {
       cancelled = true;
+      initialLoadingRef.current = false;
       contentRequestRef.current += 1;
       gitDiffRequestRef.current += 1;
     };
-  }, [filePath, hostId, fetchContent]);
+  }, [active, filePath, hostId, sourceSessionId, fetchContent]);
 
   // Watching (and refreshing a hidden tab) only while this tab is visible.
   // Coming back fetches silently: what was rendered stays until new bytes
@@ -964,7 +978,11 @@ function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, on
     void fetchGitDiff(filePath);
     const stopWatching = watchFile(filePath, hostId, sourceSessionId, {
       onConnected: () => setWatching(true),
-      onChange: () => {
+      onChange: (change) => {
+        // The subscription reports the current size on every new epoch; the
+        // same bytes the view already has are not a change.
+        if (initialLoadingRef.current) return;
+        if (dataRef.current && change.size !== undefined && change.size === dataRef.current.size) return;
         void fetchContent(filePath);
         void fetchGitDiff(filePath);
       },

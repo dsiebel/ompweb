@@ -71,3 +71,24 @@ test("a requested diff survives the first render and shows the patch", async () 
   assert.ok(view.container.textContent.includes("old line"));
   assert.ok(view.container.textContent.includes("new line"));
 });
+
+test("a hidden tab loads nothing until shown, and coming back does not refetch", async () => {
+  browser();
+  let reads = 0;
+  globalThis.fetch = async (url) => {
+    if (String(url).startsWith("/api/git/")) return Response.json({ supported: false });
+    reads += 1;
+    return Response.json({ content: "alpha", language: "text", size: 5 });
+  };
+  const props = { filePath: "/same/a.txt", cwd: "/same", hostId: "host-a", active: false };
+  const view = render(React.createElement(FileViewer, props));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(reads, 0, "a tab the user never opened does no work");
+  view.rerender(React.createElement(FileViewer, { ...props, active: true }));
+  await waitFor(() => assert.ok(view.container.textContent.includes("alpha")));
+  assert.equal(reads, 1);
+  view.rerender(React.createElement(FileViewer, { ...props, active: false }));
+  view.rerender(React.createElement(FileViewer, { ...props, active: true }));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(reads, 1, "coming back keeps what is rendered instead of reading again");
+});

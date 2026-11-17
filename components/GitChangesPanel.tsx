@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Check, ChevronRight, ExternalLink, GitBranch, RefreshCw, Search, X } from "lucide-react";
+import { AtSign, Check, ChevronRight, ExternalLink, GitBranch, RefreshCw, Search, X } from "lucide-react";
 import { getFileIcon } from "./FileIcons";
 import { GIT_STATUS_COLORS, GIT_STATUS_LABEL_KEYS } from "./FileExplorer";
 import { translate, useI18n } from "@/lib/i18n";
@@ -27,6 +27,8 @@ interface Props {
   hostId: string;
   refreshKey?: number;
   onOpenFile: (filePath: string, fileName: string, sourceSessionId?: string | null) => void;
+  /** Inserts the changed file's path into the composer (row action). */
+  onAtMention?: (relativePath: string, isDir: boolean) => void;
   onRefreshDone?: () => void;
 }
 
@@ -41,7 +43,7 @@ async function fetchStatus(cwd: string, hostId: string, sourceSessionId?: string
   return res.json() as Promise<GitStatusResponse>;
 }
 
-export function GitChangesPanel({ cwd, hostId, sourceSessionId, refreshKey, onOpenFile, onRefreshDone }: Props) {
+export function GitChangesPanel({ cwd, hostId, sourceSessionId, refreshKey, onOpenFile, onAtMention, onRefreshDone }: Props) {
   const { t, tn } = useI18n();
   const [files, setFiles] = useState<GitStatusResponse["files"]>([]);
   const [isRepo, setIsRepo] = useState(false);
@@ -199,6 +201,33 @@ export function GitChangesPanel({ cwd, hostId, sourceSessionId, refreshKey, onOp
         >
           {file.code}
         </span>
+        {onAtMention && (
+          <button
+            className="git-change-mention-action"
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAtMention(relative, false);
+            }}
+            title={t("fileExplorer.insertPathIntoChat")}
+            aria-label={t("fileExplorer.insertPathIntoChat")}
+            style={{
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 24,
+              height: 24,
+              background: "none",
+              border: "none",
+              borderRadius: "var(--radius-control)",
+              color: "var(--text-dim)",
+              cursor: "pointer",
+            }}
+          >
+            <AtSign size={13} strokeWidth={2} aria-hidden="true" />
+          </button>
+        )}
         <button
           className="git-change-open-action"
           type="button"
