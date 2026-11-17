@@ -1,9 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { AtSign, Check, ChevronRight, ExternalLink, GitBranch, RefreshCw, Search, X } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Check, ChevronRight, ExternalLink, GitBranch, RefreshCw, Search, X } from "lucide-react";
 import { getFileIcon } from "./FileIcons";
-import { DiffView } from "./FileViewer";
 import { GIT_STATUS_COLORS, GIT_STATUS_LABEL_KEYS } from "./FileExplorer";
 import { translate, useI18n } from "@/lib/i18n";
 import { formatApiError } from "@/lib/i18n/api-error";
@@ -13,7 +12,7 @@ import {
   getRelativeFilePath,
   normalizeFilePathSlashes,
 } from "@/lib/file-paths";
-import type { GitCollapseReason, GitFileDiffResponse, GitFileStatus, GitStatusResponse } from "@/lib/git-types";
+import type { GitCollapseReason, GitFileStatus, GitStatusResponse } from "@/lib/git-types";
 
 const COLLAPSE_REASON_LABEL_KEYS: Record<GitCollapseReason, string> = {
   generated: "gitChanges.reasonGenerated",
@@ -28,7 +27,6 @@ interface Props {
   hostId: string;
   refreshKey?: number;
   onOpenFile: (filePath: string, fileName: string, sourceSessionId?: string | null) => void;
-  onAtMention?: (relativePath: string, isDir: boolean) => void;
   onRefreshDone?: () => void;
 }
 
@@ -43,35 +41,21 @@ async function fetchStatus(cwd: string, hostId: string, sourceSessionId?: string
   return res.json() as Promise<GitStatusResponse>;
 }
 
-async function fetchPatch(cwd: string, filePath: string, hostId: string, sourceSessionId?: string | null): Promise<GitFileDiffResponse> {
-  const params = new URLSearchParams({ cwd, path: filePath, hostId });
-  if (sourceSessionId) params.set("sessionId", sourceSessionId);
-  const res = await fetch(`/api/git/diff?${params.toString()}`);
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: string; code?: string };
-    throw new Error(formatApiError({ ...body, error: body.error ?? translate("gitChanges.diffLoadFailed", { status: res.status }) }));
-  }
-  return res.json() as Promise<GitFileDiffResponse>;
-}
-
-export function GitChangesPanel({ cwd, hostId, sourceSessionId, refreshKey, onOpenFile, onAtMention, onRefreshDone }: Props) {
+export function GitChangesPanel({ cwd, hostId, sourceSessionId, refreshKey, onOpenFile, onRefreshDone }: Props) {
   const { t, tn } = useI18n();
   const [files, setFiles] = useState<GitStatusResponse["files"]>([]);
   const [isRepo, setIsRepo] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  // The last row the user acted on, for the list highlight only: the diff
+  // itself is a main-pane tab now, so the panel renders no patch.
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [patch, setPatch] = useState<string | null>(null);
-  const [patchSupported, setPatchSupported] = useState(true);
-  const [patchLoading, setPatchLoading] = useState(false);
-  const [patchError, setPatchError] = useState<string | null>(null);
   const [treeRefreshKey, setTreeRefreshKey] = useState(0);
   const [hoveredPath, setHoveredPath] = useState<string | null>(null);
   const [showAttributeFiles, setShowAttributeFiles] = useState(false);
   const attributeListId = useId();
   const filterInputRef = useRef<HTMLInputElement>(null);
-  const patchRequestRef = useRef(0);
   const refreshToken = `${refreshKey ?? 0}:${treeRefreshKey}`;
 
   // Keep the refresh-done callback in a ref so its identity cannot re-trigger
@@ -89,15 +73,9 @@ export function GitChangesPanel({ cwd, hostId, sourceSessionId, refreshKey, onOp
         const nextFiles = status.isGitRepository ? status.files : [];
         setFiles(nextFiles);
         setIsRepo(status.isGitRepository);
-        // Keep the selection when it still exists; otherwise preview the first
-        // reviewable change (not one .gitattributes marks generated/docs/-diff)
-        // so the diff pane is never blank behind a file list.
-        setSelectedPath((prev) =>
-          prev && nextFiles.some((f) => f.filePath === prev)
-            ? prev
-            : (nextFiles.find((f) => !f.collapseReason) ?? nextFiles[0])?.filePath ?? null,
-        );
-        // Nothing else to review: open the group so the previewed file is visible.
+        // Keep the highlight when the row still exists.
+        setSelectedPath((prev) => (prev && nextFiles.some((f) => f.filePath === prev) ? prev : null));
+        // Only generated/docs files changed: open the group so they are visible.
         if (nextFiles.length > 0 && nextFiles.every((f) => f.collapseReason)) setShowAttributeFiles(true);
       })
       .catch((e) => {
@@ -114,34 +92,6 @@ export function GitChangesPanel({ cwd, hostId, sourceSessionId, refreshKey, onOp
     return () => { cancelled = true; };
   }, [cwd, hostId, sourceSessionId, refreshToken]);
 
-  useEffect(() => {
-    if (!selectedPath) {
-      setPatch(null);
-      setPatchSupported(true);
-      setPatchError(null);
-      return;
-    }
-    const requestId = ++patchRequestRef.current;
-    setPatchLoading(true);
-    setPatchError(null);
-    fetchPatch(cwd, selectedPath, hostId, sourceSessionId)
-      .then((diff) => {
-        if (requestId !== patchRequestRef.current) return;
-        setPatchSupported(diff.supported);
-        setPatch(typeof diff.patch === "string" ? diff.patch : null);
-      })
-      .catch((e) => {
-        if (requestId !== patchRequestRef.current) return;
-        setPatch(null);
-        setPatchSupported(true);
-        setPatchError(e instanceof Error ? e.message : String(e));
-      })
-      .finally(() => {
-        if (requestId === patchRequestRef.current) setPatchLoading(false);
-      });
-    return () => { patchRequestRef.current = requestId + 1; };
-  }, [cwd, hostId, sourceSessionId, selectedPath, refreshToken]);
-
   const [primaryFiles, attributeFiles] = useMemo(() => {
     const q = filter.trim().toLowerCase();
     const matching = q
@@ -149,17 +99,6 @@ export function GitChangesPanel({ cwd, hostId, sourceSessionId, refreshKey, onOp
       : files;
     return [matching.filter((f) => !f.collapseReason), matching.filter((f) => f.collapseReason)];
   }, [files, filter, cwd]);
-
-  const selectedFile = selectedPath ? files.find((f) => f.filePath === selectedPath) ?? null : null;
-  const selectedRelative = selectedPath ? getRelativeFilePath(selectedPath, cwd) : "";
-
-  const openSelected = useCallback(() => {
-    if (selectedPath) onOpenFile(selectedPath, getFileName(selectedPath), sourceSessionId);
-  }, [selectedPath, onOpenFile, sourceSessionId]);
-
-  const mentionSelected = useCallback(() => {
-    if (selectedPath) onAtMention?.(getRelativeFilePath(selectedPath, cwd), false);
-  }, [selectedPath, cwd, onAtMention]);
 
   const renderRow = (file: GitFileStatus) => {
     const relative = getRelativeFilePath(file.filePath, cwd);
@@ -176,15 +115,16 @@ export function GitChangesPanel({ cwd, hostId, sourceSessionId, refreshKey, onOp
         tabIndex={0}
         aria-selected={isSelected}
         aria-label={`${name} (${t(GIT_STATUS_LABEL_KEYS[file.status])}${reasonLabel ? `, ${reasonLabel}` : ""})`}
-        onClick={() => setSelectedPath(file.filePath)}
-        onDoubleClick={() => onOpenFile(file.filePath, getFileName(file.filePath), sourceSessionId)}
+        // The list is navigation now: a row opens its diff in the main pane.
+        onClick={() => {
+          setSelectedPath(file.filePath);
+          onOpenFile(file.filePath, getFileName(file.filePath), sourceSessionId);
+        }}
         onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            onOpenFile(file.filePath, getFileName(file.filePath), sourceSessionId);
-          } else if (e.key === " ") {
+          if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             setSelectedPath(file.filePath);
+            onOpenFile(file.filePath, getFileName(file.filePath), sourceSessionId);
           }
         }}
         onMouseEnter={() => setHoveredPath(file.filePath)}
@@ -434,111 +374,6 @@ export function GitChangesPanel({ cwd, hostId, sourceSessionId, refreshKey, onOp
                   </div>
                 )}
               </>
-            )}
-          </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "5px 12px",
-              borderBottom: "1px solid var(--border)",
-              flexShrink: 0,
-              minWidth: 0,
-            }}
-          >
-            <span
-              style={{
-                flex: 1,
-                minWidth: 0,
-                fontSize: 11,
-                fontFamily: "var(--font-mono)",
-                color: "var(--text)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-              title={selectedRelative}
-            >
-              {selectedRelative}
-            </span>
-            {selectedFile && (
-              <span
-                title={t(GIT_STATUS_LABEL_KEYS[selectedFile.status])}
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: GIT_STATUS_COLORS[selectedFile.status],
-                  flexShrink: 0,
-                }}
-              >
-                {t(GIT_STATUS_LABEL_KEYS[selectedFile.status])}
-              </span>
-            )}
-            {onAtMention && (
-              <button
-                className="git-change-mention-action"
-                type="button"
-                onClick={mentionSelected}
-                disabled={!selectedPath}
-                title={t("fileExplorer.insertPathIntoChat")}
-                aria-label={t("fileExplorer.insertPathIntoChat")}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 26, height: 22, padding: 0,
-                  border: "none",
-                  borderRadius: "var(--radius-control)",
-                  cursor: selectedPath ? "pointer" : "default",
-                  opacity: selectedPath ? 1 : 0.6,
-                  fontSize: 11, fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0,
-                }}
-              >
-                <AtSign size={14} strokeWidth={1.8} aria-hidden="true" />
-              </button>
-            )}
-            <button
-              className="git-change-footer-open"
-              type="button"
-              onClick={openSelected}
-              disabled={!selectedPath}
-              title={t("gitChanges.openFile")}
-              aria-label={t("gitChanges.openFile")}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: 26, height: 22, padding: 0,
-                background: "var(--bg-panel)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius-control)",
-                color: "var(--text-muted)",
-                cursor: selectedPath ? "pointer" : "default",
-                opacity: selectedPath ? 1 : 0.6,
-                flexShrink: 0,
-              }}
-            >
-              <ExternalLink size={11} strokeWidth={2.2} aria-hidden="true" />
-            </button>
-          </div>
-          <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)" }}>
-            {patchLoading ? (
-              <div role="status" aria-live="polite" style={{ padding: "12px 16px", fontSize: 12, color: "var(--text-dim)" }}>{t("fileViewer.loading")}</div>
-            ) : patchError ? (
-              <div role="alert" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "12px 16px", fontSize: 12, color: "var(--status-error)" }}>
-                <span>{patchError}</span>
-                <button
-                  className="load-retry-button"
-                  type="button"
-                  onClick={() => setTreeRefreshKey((key) => key + 1)}
-                  style={{ minHeight: 32, padding: "4px 8px", border: "1px solid var(--border)", borderRadius: "var(--radius-control)", background: "var(--bg-panel)", color: "var(--text)", cursor: "pointer", fontSize: 11, fontWeight: 600 }}
-                >
-                  {t("chatWindow.retry")}
-                </button>
-              </div>
-            ) : !patchSupported || patch === null ? (
-              <div style={{ padding: "12px 16px", fontSize: 12, color: "var(--text-dim)" }}>
-                {t(selectedFile?.collapseReason === "no-diff" ? "gitChanges.diffSuppressed" : "gitChanges.diffUnavailable")}
-              </div>
-            ) : (
-              <DiffView patch={patch} />
             )}
           </div>
         </>

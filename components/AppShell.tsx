@@ -3100,25 +3100,25 @@ export function AppShell({ appName }: { appName: string }) {
             chat={chatMainBody}
             showOnboarding={!showChat}
             empty={emptyMainPane}
-            file={activeFileTab ? (
+            renderFile={(tab, active) => (
               <FileViewer
-                key={activeFileTab.id}
-                filePath={activeFileTab.path}
-                hostId={activeFileTab.hostId}
-                cwd={activeFileTab.sourceCwd ?? undefined}
-                sourceSessionId={activeFileTab.sourceSessionId}
+                key={tab.id}
+                filePath={tab.path}
+                hostId={tab.hostId}
+                cwd={tab.sourceCwd ?? undefined}
+                sourceSessionId={tab.sourceSessionId}
                 gitRefreshKey={explorerRefreshKey}
-                active
-                displayMode={activeFileTab.mode}
-                onDisplayModeChange={(mode) => setMainTabs((prev) => setTabMode(prev, activeFileTab.id, mode))}
-                onMentionLines={activeFileInSource ? handleFileLineMention : undefined}
+                active={active}
+                displayMode={tab.mode}
+                onDisplayModeChange={(mode) => setMainTabs((prev) => setTabMode(prev, tab.id, mode))}
+                onMentionLines={tab.sourceSessionId === (selectedSession?.id ?? null) && tab.hostId === workspaceHostId ? handleFileLineMention : undefined}
                 onOpenFile={(filePath) => handleOpenFile(filePath, getFileName(filePath), {
-                  hostId: activeFileTab.hostId,
-                  cwd: activeFileTab.sourceCwd,
-                  sessionId: activeFileTab.sourceSessionId,
+                  hostId: tab.hostId,
+                  cwd: tab.sourceCwd,
+                  sessionId: tab.sourceSessionId,
                 })}
               />
-            ) : null}
+            )}
           />
         </div>
           </>

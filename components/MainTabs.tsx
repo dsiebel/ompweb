@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import { MessageSquareText, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { getFileIcon } from "./FileIcons";
-import type { MainTab } from "./main-tabs";
+import type { FileMainTab, MainTab } from "./main-tabs";
 
 interface Props {
   tabs: MainTab[];
@@ -20,8 +20,11 @@ interface Props {
    * live stream, composer draft and @-mention inserts survive tab switches.
    */
   chat: ReactNode;
-  /** The active file tab's viewer; only this one is mounted. */
-  file: ReactNode | null;
+  /**
+   * Renders one file tab's viewer. Every file tab stays mounted (hidden while
+   * inactive) so a tab switch keeps its rendered content and scroll position.
+   */
+  renderFile: (tab: FileMainTab, active: boolean) => ReactNode;
   /** Shown when no tab is open at all. */
   empty: ReactNode;
   /** With no tab open: show the chat's onboarding screen instead of the empty hint. */
@@ -63,7 +66,7 @@ function tabTitle(tab: MainTab, labelFor?: (tab: MainTab) => string): string {
  * underline, close button) but keeps its own semantics: every tab here is
  * content, not a right-panel navigation view.
  */
-export function MainTabs({ tabs, activeTabId, onSelectTab, onCloseTab, labelFor, fileActions, chat, file, empty, showOnboarding = false }: Props) {
+export function MainTabs({ tabs, activeTabId, onSelectTab, onCloseTab, labelFor, fileActions, chat, renderFile, empty, showOnboarding = false }: Props) {
   const { t } = useI18n();
   const listRef = useRef<HTMLDivElement>(null);
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
@@ -225,14 +228,19 @@ export function MainTabs({ tabs, activeTabId, onSelectTab, onCloseTab, labelFor,
       <div id="main-tab-panel" role="tabpanel" aria-label={active ? tabTitle(active, labelFor) : t("mainTabs.label")} style={{ flex: 1, minHeight: 0, minWidth: 0, position: "relative", overflow: "hidden" }}>
         {active === null
           ? (showOnboarding ? chat : empty)
-          : file !== null
-            ? (
-              <>
-                <div aria-hidden="true" style={{ display: "none" }}>{chat}</div>
-                {file}
-              </>
-            )
-            : chat}
+          : (
+            <>
+              <div aria-hidden={active.kind !== "chat"} style={{ display: active.kind === "chat" ? "flex" : "none", flexDirection: "column", height: "100%", minHeight: 0 }}>{chat}</div>
+              {tabs.filter((tab): tab is FileMainTab => tab.kind === "file").map((tab) => {
+                const isActive = tab.id === activeTabId;
+                return (
+                  <div key={tab.id} aria-hidden={!isActive} style={{ display: isActive ? "block" : "none", height: "100%", minHeight: 0 }}>
+                    {renderFile(tab, isActive)}
+                  </div>
+                );
+              })}
+            </>
+          )}
       </div>
     </div>
   );

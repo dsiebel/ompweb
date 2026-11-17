@@ -384,11 +384,13 @@ export function DiffView({ patch }: { patch: string }) {
                 display: "flex",
                 minWidth: "100%",
                 background: bg,
-                borderLeft: line.type === "added"
-                  ? "3px solid var(--status-success)"
+                // Inset, not a border: the status stripe must not shift the
+                // line-number column away from the source view's alignment.
+                boxShadow: line.type === "added"
+                  ? "inset 3px 0 0 var(--status-success)"
                   : line.type === "removed"
-                  ? "3px solid var(--status-error)"
-                  : "3px solid transparent",
+                  ? "inset 3px 0 0 var(--status-error)"
+                  : undefined,
               }}
             >
               <span
@@ -915,12 +917,10 @@ function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, on
     setLanguageOverride(null);
   }, [filePath]);
 
-  // Initial load + SSE watch setup
+  // Initial load per file. Deliberately independent of `active`: a resident
+  // tab that is only hidden keeps its rendered content (and scroll) instead of
+  // flashing a reload every time the user comes back to it.
   useEffect(() => {
-    if (!active) {
-      setWatching(false);
-      return;
-    }
     setLoading(true);
     setError(null);
     setData(null);
@@ -928,7 +928,6 @@ function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, on
     setDiffChecked(false);
     if (controlledModeRef.current === undefined) setInternalMode("source");
     setWrapLines(false);
-    setWatching(false);
 
     // Cancel effect-local work on filePath change so a stale in-flight load
     // cannot revert display mode or flip loading off for the new file.
@@ -945,6 +944,24 @@ function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, on
       if (!cancelled) setLoading(false);
     });
 
+    return () => {
+      cancelled = true;
+      contentRequestRef.current += 1;
+      gitDiffRequestRef.current += 1;
+    };
+  }, [filePath, hostId, fetchContent]);
+
+  // Watching (and refreshing a hidden tab) only while this tab is visible.
+  // Coming back fetches silently: what was rendered stays until new bytes
+  // arrive, so a tab switch never repaints the view from scratch.
+  useEffect(() => {
+    if (!active) {
+      setWatching(false);
+      return;
+    }
+    // The file channel sends one change frame for every new watch epoch, so
+    // the bytes missed while the tab was hidden arrive without a second read.
+    void fetchGitDiff(filePath);
     const stopWatching = watchFile(filePath, hostId, sourceSessionId, {
       onConnected: () => setWatching(true),
       onChange: () => {
@@ -953,12 +970,9 @@ function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, on
       },
       onDisconnected: () => setWatching(false),
     });
-
     return () => {
-      cancelled = true;
-      contentRequestRef.current += 1;
-      gitDiffRequestRef.current += 1;
       stopWatching();
+      setWatching(false);
     };
   }, [active, filePath, hostId, fetchContent, fetchGitDiff, sourceSessionId]);
 

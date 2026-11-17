@@ -28,7 +28,7 @@ test("the strip lists every tab and marks only the active one selected", () => {
     onSelectTab: () => {},
     onCloseTab: () => {},
     chat: React.createElement("div", { "data-testid": "chat" }, "chat"),
-    file: React.createElement("div", { "data-testid": "file" }, "file"),
+    renderFile: (tab, active) => React.createElement("div", { "data-testid": `file-${tab.id}`, "data-active": active }, tab.label),
     empty: React.createElement("div", { "data-testid": "empty" }, "empty"),
   }));
 
@@ -36,13 +36,16 @@ test("the strip lists every tab and marks only the active one selected", () => {
   assert.deepEqual(rendered.map((tab) => tab.getAttribute("data-tab-id")), tabs.map((tab) => tab.id));
   assert.equal(screen.getByRole("tab", { name: "/work/a.ts" }).getAttribute("aria-selected"), "true");
   assert.equal(screen.getByRole("tab", { name: "First session" }).getAttribute("aria-selected"), "false");
-  // Exactly one panel, and only the active file tab's viewer is inside it.
+  // One panel holds every open tab's body: the active file tab is visible,
+  // the other file tab and the chat stay mounted but hidden (they keep their
+  // rendered content and scroll until the user comes back).
   assert.equal(screen.getAllByRole("tabpanel").length, 1);
   assert.equal(screen.getByRole("tabpanel").getAttribute("aria-label"), "/work/a.ts");
-  assert.ok(screen.getByTestId("file"));
-  // The chat stays mounted but hidden: its stream, draft and mentions survive.
+  assert.equal(screen.getByTestId(`file-${tabs[1].id}`).getAttribute("data-active"), "true");
+  assert.equal(screen.getByTestId(`file-${tabs[2].id}`).getAttribute("data-active"), "false");
+  assert.notEqual(screen.getByTestId(`file-${tabs[2].id}`).closest("[aria-hidden=\"true\"]"), null);
   const chat = screen.getByTestId("chat");
-  assert.equal(chat.closest("[aria-hidden=\"true\"]") !== null, true);
+  assert.notEqual(chat.closest("[aria-hidden=\"true\"]"), null);
   assert.equal(screen.queryByTestId("empty"), null);
 });
 
@@ -53,12 +56,14 @@ test("with a chat tab active the chat body is visible and no viewer mounts", () 
     onSelectTab: () => {},
     onCloseTab: () => {},
     chat: React.createElement("div", { "data-testid": "chat" }, "chat"),
-    file: null,
+    renderFile: (tab, active) => React.createElement("div", { "data-testid": `file-${tab.id}`, "data-active": active }, tab.label),
     empty: React.createElement("div", { "data-testid": "empty" }, "empty"),
   }));
   assert.ok(screen.getByTestId("chat"));
   assert.equal(screen.getByTestId("chat").closest("[aria-hidden=\"true\"]"), null);
-  assert.equal(screen.queryByTestId("file"), null);
+  // File viewers stay mounted while the chat is shown, just hidden.
+  assert.equal(screen.getByTestId(`file-${tabs[1].id}`).getAttribute("data-active"), "false");
+  assert.notEqual(screen.getByTestId(`file-${tabs[1].id}`).closest("[aria-hidden=\"true\"]"), null);
 });
 
 test("clicking a tab activates it, arrows move the roving focus, the close button closes", async () => {
@@ -70,7 +75,7 @@ test("clicking a tab activates it, arrows move the roving focus, the close butto
     onSelectTab: (id) => selected.push(id),
     onCloseTab: (id) => closed.push(id),
     chat: React.createElement("div", { "data-testid": "chat" }, "chat"),
-    file: null,
+    renderFile: (tab) => React.createElement("div", null, tab.label),
     empty: null,
   }));
 
@@ -97,7 +102,7 @@ test("with no tab open the empty hint renders instead of the chat", () => {
     onSelectTab: () => {},
     onCloseTab: () => {},
     chat: React.createElement("div", { "data-testid": "chat" }, "chat"),
-    file: null,
+    renderFile: () => null,
     empty: React.createElement("div", { "data-testid": "empty" }, "empty"),
     showOnboarding: false,
   }));
@@ -113,7 +118,7 @@ test("with nothing selected at all the chat keeps the onboarding screen", () => 
     onSelectTab: () => {},
     onCloseTab: () => {},
     chat: React.createElement("div", { "data-testid": "chat" }, "chat"),
-    file: null,
+    renderFile: () => null,
     empty: React.createElement("div", { "data-testid": "empty" }, "empty"),
     showOnboarding: true,
   }));
