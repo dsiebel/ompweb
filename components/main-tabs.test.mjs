@@ -115,7 +115,10 @@ test("persistence round-trips tabs, order and the active tab", () => {
 
 test("the transient new-session tab is never persisted", () => {
   const state = openChatTab(EMPTY_MAIN_TABS, chat(""));
-  assert.deepEqual(JSON.parse(serializeMainTabs(state)).tabs, []);
+  const stored = JSON.parse(serializeMainTabs(state));
+  assert.deepEqual(stored.tabs, []);
+  // Its active id would restore to nothing, so it is not stored either.
+  assert.equal(stored.activeTabId, null);
 });
 
 test("restore drops a chat tab whose session is gone", () => {

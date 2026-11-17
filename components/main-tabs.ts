@@ -207,9 +207,11 @@ export function restoreMainTabs(raw: unknown, options: RestoreOptions = {}): Mai
 
 /** The persisted shape; the transient new-session tab is left out. */
 export function serializeMainTabs(state: MainTabsState): string {
+  const tabs = state.tabs.filter((tab) => tab.kind !== "chat" || tab.sessionId !== "");
   return JSON.stringify({
-    tabs: state.tabs.filter((tab) => tab.kind !== "chat" || tab.sessionId !== ""),
-    activeTabId: state.activeTabId,
+    tabs,
+    // Never point the restored active tab at a tab that was not persisted.
+    activeTabId: tabs.some((tab) => tab.id === state.activeTabId) ? state.activeTabId : null,
   });
 }
 

@@ -809,6 +809,9 @@ function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, on
   const { isDark } = useTheme();
   const [data, setData] = useState<FileData | null>(null);
   const [gitDiff, setGitDiff] = useState<GitFileDiffResponse | null>(null);
+  // A diff request finished (with or without a diff). Until then a requested
+  // "diff" mode must not be forced back to source.
+  const [diffChecked, setDiffChecked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [highlightReady, setHighlightReady] = useState(true);
@@ -882,6 +885,7 @@ function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, on
     const requestId = ++gitDiffRequestRef.current;
     if (!cwd) {
       setGitDiff(null);
+      setDiffChecked(true);
       return;
     }
 
@@ -892,8 +896,12 @@ function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, on
       const next = await response.json() as GitFileDiffResponse & { error?: string };
       if (requestId !== gitDiffRequestRef.current) return;
       setGitDiff(response.ok && next.supported && typeof next.patch === "string" ? next : null);
+      setDiffChecked(true);
     } catch {
-      if (requestId === gitDiffRequestRef.current) setGitDiff(null);
+      if (requestId === gitDiffRequestRef.current) {
+        setGitDiff(null);
+        setDiffChecked(true);
+      }
     }
   }, [cwd, hostId, sourceSessionId]);
 
@@ -917,6 +925,7 @@ function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, on
     setError(null);
     setData(null);
     setGitDiff(null);
+    setDiffChecked(false);
     if (controlledModeRef.current === undefined) setInternalMode("source");
     setWrapLines(false);
     setWatching(false);
@@ -961,8 +970,8 @@ function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, on
   const hasGitDiff = gitDiff?.supported === true && typeof gitDiff.patch === "string";
 
   useEffect(() => {
-    if (!hasGitDiff && displayMode === "diff") setDisplayModeRef.current("source");
-  }, [displayMode, hasGitDiff]);
+    if (diffChecked && !hasGitDiff && displayMode === "diff") setDisplayModeRef.current("source");
+  }, [displayMode, hasGitDiff, diffChecked]);
 
   const parsedFrontmatter = useMemo(
     () => (data?.language === "markdown" ? parseFrontmatter(data.content) : null),

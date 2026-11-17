@@ -1291,8 +1291,9 @@ export function AppShell({ appName }: { appName: string }) {
       setNewSessionHostId(undefined);
       setSelectedSession(null);
       // The closed conversation's tab gives way to the new-session composer,
-      // like the chat area did before the main pane had tabs.
-      setMainTabs((prev) => openChatTab(prev, { sessionId: "", hostId: LOCAL_HOST_ID, title: t("appShell.newSession") }));
+      // like the chat area did before the main pane had tabs — unless other
+      // tabs (restored files) are open, which keep the pane.
+      setMainTabs((prev) => (prev.tabs.length > 0 ? prev : openChatTab(prev, { sessionId: "", hostId: LOCAL_HOST_ID, title: t("appShell.newSession") })));
       setSessionKey((key) => key + 1);
       setBranchTree([]);
       setBranchActiveLeafId(null);
@@ -1324,7 +1325,7 @@ export function AppShell({ appName }: { appName: string }) {
     // Close any session that belongs to a different project — it no longer
     // matches the selected project directory.
     setSelectedSession(null);
-    setMainTabs((prev) => openChatTab(prev, { sessionId: "", hostId: remoteHostId(hostId) ?? LOCAL_HOST_ID, title: t("appShell.newSession") }));
+    setMainTabs((prev) => (prev.tabs.length > 0 ? prev : openChatTab(prev, { sessionId: "", hostId: remoteHostId(hostId) ?? LOCAL_HOST_ID, title: t("appShell.newSession") })));
     setNewSessionCwd((prev) => {
       if (prev && prev !== cwd) return null;
       return prev;
@@ -2002,11 +2003,18 @@ export function AppShell({ appName }: { appName: string }) {
       // A tab opened while the checks ran (the sidebar restoring a session)
       // is newer than the blob: keep it, appending it after the stored order.
       const current = mainTabsRef.current;
-      const merged = current.tabs.length === 0
+      // The stored active tab wins: anything opened while the checks ran (the
+      // sidebar's workspace restore and its composer tab) is not a user pick.
+      // The boot-time composer tab is not something the user picked: once
+      // stored tabs survive, it would only sit beside them unasked.
+      const currentTabs = restored.tabs.length > 0
+        ? current.tabs.filter((tab) => tab.kind !== "chat" || tab.sessionId !== "")
+        : current.tabs;
+      const merged = currentTabs.length === 0
         ? restored
         : {
-            tabs: [...restored.tabs.filter((tab) => !current.tabs.some((open) => open.id === tab.id)), ...current.tabs],
-            activeTabId: current.activeTabId ?? restored.activeTabId,
+            tabs: [...restored.tabs.filter((tab) => !currentTabs.some((open) => open.id === tab.id)), ...currentTabs],
+            activeTabId: restored.activeTabId ?? current.activeTabId,
           };
       setMainTabs(merged);
       setMainTabsRestored(true);

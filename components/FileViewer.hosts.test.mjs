@@ -46,3 +46,28 @@ test("an older read cannot replace the same path after its host changes", async 
   assert.ok(view.container.textContent.includes("Beta document"));
   assert.ok(!view.container.textContent.includes("Late alpha"));
 });
+
+test("a requested diff survives the first render and shows the patch", async () => {
+  browser();
+  const modes = [];
+  globalThis.fetch = async (url) => {
+    if (String(url).startsWith("/api/git/")) {
+      // Resolve after a tick, as the real request does.
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return Response.json({ supported: true, patch: "@@ -1,1 +1,1 @@\n-old line\n+new line" });
+    }
+    return Response.json({ content: "new line", language: "text", size: 8 });
+  };
+  const view = render(React.createElement(FileViewer, {
+    filePath: "/same/report.txt",
+    cwd: "/same",
+    hostId: "host-a",
+    displayMode: "diff",
+    onDisplayModeChange: (mode) => modes.push(mode),
+  }));
+  await waitFor(() => assert.ok(view.container.textContent.includes("new line")));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.deepEqual(modes, [], "a requested diff is not downgraded before the diff request answers");
+  assert.ok(view.container.textContent.includes("old line"));
+  assert.ok(view.container.textContent.includes("new line"));
+});
