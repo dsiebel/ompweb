@@ -1096,6 +1096,9 @@ export function AppShell({ appName }: { appName: string }) {
   const mainTabsRef = useRef(mainTabs);
   mainTabsRef.current = mainTabs;
   const [mainTabsRestored, setMainTabsRestored] = useState(false);
+  // Read by handlers that must not act before the stored tabs are back.
+  const mainTabsRestoredRef = useRef(mainTabsRestored);
+  mainTabsRestoredRef.current = mainTabsRestored;
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const closeRightPanel = useCallback(() => {
     setRightPanelOpen(false);
@@ -1293,7 +1296,9 @@ export function AppShell({ appName }: { appName: string }) {
       // The closed conversation's tab gives way to the new-session composer,
       // like the chat area did before the main pane had tabs — unless other
       // tabs (restored files) are open, which keep the pane.
-      setMainTabs((prev) => (prev.tabs.length > 0 ? prev : openChatTab(prev, { sessionId: "", hostId: LOCAL_HOST_ID, title: t("appShell.newSession") })));
+      setMainTabs((prev) => (mainTabsRestoredRef.current && prev.tabs.length === 0
+        ? openChatTab(prev, { sessionId: "", hostId: LOCAL_HOST_ID, title: t("appShell.newSession") })
+        : prev));
       setSessionKey((key) => key + 1);
       setBranchTree([]);
       setBranchActiveLeafId(null);
@@ -1325,7 +1330,9 @@ export function AppShell({ appName }: { appName: string }) {
     // Close any session that belongs to a different project — it no longer
     // matches the selected project directory.
     setSelectedSession(null);
-    setMainTabs((prev) => (prev.tabs.length > 0 ? prev : openChatTab(prev, { sessionId: "", hostId: remoteHostId(hostId) ?? LOCAL_HOST_ID, title: t("appShell.newSession") })));
+    setMainTabs((prev) => (mainTabsRestoredRef.current && prev.tabs.length === 0
+      ? openChatTab(prev, { sessionId: "", hostId: remoteHostId(hostId) ?? LOCAL_HOST_ID, title: t("appShell.newSession") })
+      : prev));
     setNewSessionCwd((prev) => {
       if (prev && prev !== cwd) return null;
       return prev;
@@ -1676,7 +1683,9 @@ export function AppShell({ appName }: { appName: string }) {
       setNewSessionCreation({ id: randomUUID() });
       setNewSessionPoolProject(selectedSession.poolId ? workspaceOptions.projects.find((project) => project.poolId === selectedSession.poolId && project.projectId === selectedSession.projectId) ?? null : null);
       setNewSessionHostId(remoteHostId(selectedSession.hostId));
-      setMainTabs((prev) => openChatTab(prev, { sessionId: "", hostId: remoteHostId(selectedSession.hostId) ?? LOCAL_HOST_ID, title: t("appShell.newSession") }));
+      setMainTabs((prev) => (mainTabsRestoredRef.current && prev.tabs.length === 0
+        ? openChatTab(prev, { sessionId: "", hostId: remoteHostId(selectedSession.hostId) ?? LOCAL_HOST_ID, title: t("appShell.newSession") })
+        : prev));
       setSessionKey((k) => k + 1);
       setBranchTree([]);
       setBranchActiveLeafId(null);
@@ -1981,20 +1990,29 @@ export function AppShell({ appName }: { appName: string }) {
       } catch {
         sessions = null; // list unavailable: keep chat tabs rather than drop them
       }
+      const chatKeys = sessions?.map((session) => `${session.hostId ?? LOCAL_HOST_ID}:${session.id}`);
+      const knownSessions = chatKeys ? new Set(chatKeys) : null;
       const parsed = restoreMainTabs(blob);
       const fileChecks = await Promise.all(
         parsed.tabs.flatMap((tab) => tab.kind !== "file" ? [] : [(async () => {
+          // A file tab opened inside a session is only reachable through it:
+          // once that session is gone, the tab is too (no lookup needed).
+          if (tab.sourceSessionId !== null && knownSessions !== null
+            && !knownSessions.has(`${tab.hostId || LOCAL_HOST_ID}:${tab.sourceSessionId}`)) return null;
           try {
             const res = await fetch(getFileApiUrl(tab.path, "meta", tab.hostId, tab.sourceSessionId));
-            return res.ok ? tab.id : null;
+            // Only "not found" proves the tab cannot be shown. That includes
+            // `session_not_found`: a tab opened in a session's workspace is
+            // authorized through that session, so deleting the session takes
+            // its files with it. A 403/501/503 (an old daemon, an offline
+            // host) says the lookup could not answer, and keeps the tab.
+            return res.status === 404 ? null : tab.id;
           } catch {
             return tab.id; // network error proves nothing about the file
           }
         })()]),
       );
       if (cancelled) return;
-      const chatKeys = sessions?.map((session) => `${session.hostId ?? LOCAL_HOST_ID}:${session.id}`);
-      const knownSessions = chatKeys ? new Set(chatKeys) : null;
       const knownFiles = new Set(fileChecks.filter((id): id is string => id !== null));
       const restored = restoreMainTabs(blob, {
         ...(knownSessions ? { sessionExists: (tab: ChatMainTab) => knownSessions.has(`${tab.hostId || LOCAL_HOST_ID}:${tab.sessionId}`) } : {}),
@@ -2013,7 +2031,9 @@ export function AppShell({ appName }: { appName: string }) {
       const merged = currentTabs.length === 0
         ? restored
         : {
-            tabs: [...restored.tabs.filter((tab) => !currentTabs.some((open) => open.id === tab.id)), ...currentTabs],
+            // Stored order is the restored order; only genuinely new tabs
+            // (opened while the checks ran) go after it.
+            tabs: [...restored.tabs, ...currentTabs.filter((tab) => !restored.tabs.some((open) => open.id === tab.id))],
             activeTabId: restored.activeTabId ?? current.activeTabId,
           };
       setMainTabs(merged);
