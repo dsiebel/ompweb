@@ -1354,6 +1354,7 @@ export function AppShell({ appName }: { appName: string }) {
     // re-select, notification click) must not bump sessionKey: that remounts
     // ChatWindow, reconnects SSE, and drops the mid-run streaming view.
     setSettingsTab(null);
+    notificationHistory.markSessionRead([session.id]);
     // Every session selection is also the chat tab for that session: focus it,
     // opening it when the tab strip does not hold it yet.
     setMainTabs((prev) => {
@@ -1744,6 +1745,7 @@ export function AppShell({ appName }: { appName: string }) {
     if (isMobile) setSidebarOpen(false);
     if (isCompactOverlay) setRightPanelOpen(false);
     if (tab.kind !== "chat" || !tab.sessionId) return;
+    notificationHistory.markSessionRead([tab.sessionId]);
     if (selectedSession && sameSessionTarget(selectedSession, { id: tab.sessionId, hostId: tab.hostId || undefined })) return;
     // Switching back to a chat tab selects its session again; a session that
     // vanished meanwhile (deleted elsewhere) drops its stale tab.
@@ -1870,16 +1872,19 @@ export function AppShell({ appName }: { appName: string }) {
   // lists). Aliases keep an open tab of a moved session badged.
   const runningSessionIds = useRunningSessionIds();
   const notificationEntries = useNotificationHistory();
-  const attentionCounts = useMemo(() => {
-    const counts = new Map<string, number>();
+  // Unread notifications mean a finished turn, a question or an error. The
+  // open conversation never badges: seeing it is what clears it.
+  const attentionSessionIds = useMemo(() => {
+    const ids = new Set<string>();
+    const viewed = settingsTab ? null : selectedSession?.id ?? null;
     for (const entry of notificationEntries) {
-      if (entry.read) continue;
+      if (entry.read || entry.event.sessionId === viewed) continue;
       for (const id of [entry.event.sessionId, ...(entry.event.aliases ?? [])]) {
-        if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+        if (id && id !== viewed) ids.add(id);
       }
     }
-    return counts;
-  }, [notificationEntries]);
+    return ids;
+  }, [notificationEntries, selectedSession?.id, settingsTab]);
   // Explorer, Git, and the file viewers follow the open session's folder, then
   // the sidebar's live cwd, then the new-session cwd. Relative paths (mention,
   // copy path) resolve against the same folder so they match the Explorer.
@@ -3113,7 +3118,7 @@ export function AppShell({ appName }: { appName: string }) {
             onCloseTab={handleCloseMainTab}
             labelFor={mainTabLabel}
             runningSessionIds={runningSessionIds}
-            attentionCounts={attentionCounts}
+            attentionSessionIds={attentionSessionIds}
             fileActions={activeFileTab ? mainTabFileActions : undefined}
             chat={chatMainBody}
             showOnboarding={!showChat}

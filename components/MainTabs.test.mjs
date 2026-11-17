@@ -126,32 +126,55 @@ test("with nothing selected at all the chat keeps the onboarding screen", () => 
   assert.equal(screen.queryByTestId("empty"), null);
 });
 
-test("a running chat tab shows a live dot and unread attention count", () => {
+test("a running chat tab shows a live dot", () => {
   render(React.createElement(MainTabs, {
     tabs: [tabs[0]],
     activeTabId: tabs[0].id,
     onSelectTab: () => {},
     onCloseTab: () => {},
     runningSessionIds: new Set(["s1"]),
-    attentionCounts: new Map([["s1", 3]]),
     chat: null,
     renderFile: () => null,
     empty: null,
   }));
   const tab = screen.getByRole("tab", { name: "First session" });
-  assert.ok(tab.querySelector(".live-status-dot"));
+  assert.ok(tab.querySelector(".live-status-dot.live-pulse"));
   assert.equal(screen.getByTitle("Running") !== null, true);
-  assert.equal(screen.getByTitle("Needs your attention").textContent, "3");
 });
 
-test("an idle, read session shows neither indicator", () => {
+test("a background tab with unread notifications is bold with a static dot", () => {
+  const second = { kind: "chat", id: chatTabId("s2"), sessionId: "s2", hostId: "local", title: "Second session" };
+  render(React.createElement(MainTabs, {
+    tabs: [tabs[0], second],
+    activeTabId: tabs[0].id,
+    onSelectTab: () => {},
+    onCloseTab: () => {},
+    runningSessionIds: new Set(),
+    attentionSessionIds: new Set(["s2"]),
+    chat: null,
+    renderFile: () => null,
+    empty: null,
+  }));
+  const attentionTabs = screen.getAllByTitle("Needs your attention");
+  assert.equal(attentionTabs.length, 1);
+  const background = screen.getByRole("tab", { name: "Second session" });
+  assert.ok(background.contains(attentionTabs[0]));
+  // Same dot as running, without the pulse.
+  assert.equal(attentionTabs[0].classList.contains("live-pulse"), false);
+  assert.ok(background.querySelector(".live-status-dot"));
+  assert.equal(getComputedStyle(background.querySelector("span[style*='ellipsis']")).fontWeight, "700");
+  // The open tab never shows it: seeing the conversation is what clears it.
+  assert.equal(screen.getByRole("tab", { name: "First session" }).querySelector(".live-status-dot"), null);
+});
+
+test("an idle, fully read session shows neither indicator", () => {
   render(React.createElement(MainTabs, {
     tabs: [tabs[0]],
     activeTabId: tabs[0].id,
     onSelectTab: () => {},
     onCloseTab: () => {},
     runningSessionIds: new Set(),
-    attentionCounts: new Map(),
+    attentionSessionIds: new Set(),
     chat: null,
     renderFile: () => null,
     empty: null,

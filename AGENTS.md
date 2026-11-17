@@ -356,8 +356,9 @@ bunfig.toml           Bun dev-server bundling: tailwind plugin and the OMP_WEB_P
   `"file"` member. A row in `GitChangesPanel` opens (or switches) that file's `diff` tab on a
   single click, like the Explorer opens a file; each row also keeps its `@`-mention action.
 - Chat tabs carry status: `useRunningSessionIds` (`running` channel) shows a pulse dot while omp
-  runs that session, and the unread notification history flags a tab needing attention (aliases
-  included, so a tab of a moved session stays badged). The strip only renders; the state lives in
+  runs that session; an unread notification (finished turn, question, error) makes the tab bold
+  with a static dot, cleared when it is opened (`notificationHistory.markSessionRead`; aliases
+  included, and the open conversation never flags). The strip only renders; the state lives in
   `AppShell`.
 
 ### Adding an API route

@@ -15,8 +15,11 @@ interface Props {
   labelFor?: (tab: MainTab) => string;
   /** Session ids omp is running now: their chat tab shows a live dot. */
   runningSessionIds?: ReadonlySet<string>;
-  /** Unread notifications per session id: the chat tab shows an attention badge. */
-  attentionCounts?: ReadonlyMap<string, number>;
+  /**
+   * Sessions with unread notifications (a finished turn, a question, an error):
+   * their chat tab shows a static dot and a bold title until opened.
+   */
+  attentionSessionIds?: ReadonlySet<string>;
   /** Toolbar for the active file tab (mention, copy, download, close all...). */
   fileActions?: ReactNode;
   /**
@@ -82,7 +85,7 @@ function paneStyle(active: boolean, flex: boolean): CSSProperties {
  * underline, close button) but keeps its own semantics: every tab here is
  * content, not a right-panel navigation view.
  */
-export function MainTabs({ tabs, activeTabId, onSelectTab, onCloseTab, labelFor, runningSessionIds, attentionCounts, fileActions, chat, renderFile, empty, showOnboarding = false }: Props) {
+export function MainTabs({ tabs, activeTabId, onSelectTab, onCloseTab, labelFor, runningSessionIds, attentionSessionIds, fileActions, chat, renderFile, empty, showOnboarding = false }: Props) {
   const { t } = useI18n();
   const listRef = useRef<HTMLDivElement>(null);
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
@@ -147,6 +150,9 @@ export function MainTabs({ tabs, activeTabId, onSelectTab, onCloseTab, labelFor,
           {tabs.map((tab) => {
             const isActive = tab.id === activeTabId;
             const label = tabTitle(tab, labelFor);
+            // Needs attention (unread notification) unless it is the open tab:
+            // the same dot as running, without the pulse, plus a bold title.
+            const attention = tab.kind === "chat" && Boolean(tab.sessionId) && !isActive && (attentionSessionIds?.has(tab.sessionId) ?? false);
             // The close button names what the tab shows, not the file's path.
             const closeLabel = tab.kind === "file" ? tab.label : label;
             return (
@@ -208,7 +214,7 @@ export function MainTabs({ tabs, activeTabId, onSelectTab, onCloseTab, labelFor,
                 <span style={{ flexShrink: 0, opacity: isActive ? 1 : 0.7, display: "flex", alignItems: "center" }}>
                   <TabIcon tab={tab} />
                 </span>
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", flex: 1, fontWeight: isActive ? 500 : 400 }}>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", flex: 1, fontWeight: attention ? 700 : isActive ? 500 : 400 }}>
                   <Label tab={tab} labelFor={labelFor} />
                 </span>
                 {tab.kind === "chat" && tab.sessionId && runningSessionIds?.has(tab.sessionId) && (
@@ -219,27 +225,13 @@ export function MainTabs({ tabs, activeTabId, onSelectTab, onCloseTab, labelFor,
                     style={{ flexShrink: 0, width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", position: "relative", display: "inline-block" }}
                   />
                 )}
-                {tab.kind === "chat" && tab.sessionId && (attentionCounts?.get(tab.sessionId) ?? 0) > 0 && (
+                {attention && (
                   <span
+                    className="live-status-dot"
                     aria-label={t("mainTabs.attention")}
                     title={t("mainTabs.attention")}
-                    style={{
-                      flexShrink: 0,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      minWidth: 16,
-                      height: 15,
-                      padding: "0 4px",
-                      borderRadius: 8,
-                      background: "color-mix(in srgb, var(--status-warning) 20%, transparent)",
-                      color: "var(--status-warning)",
-                      fontSize: 10,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {(attentionCounts?.get(tab.sessionId) ?? 0) > 99 ? "99+" : attentionCounts?.get(tab.sessionId)}
-                  </span>
+                    style={{ flexShrink: 0, width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", display: "inline-block" }}
+                  />
                 )}
                 <button
                   type="button"
