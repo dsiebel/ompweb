@@ -16,10 +16,11 @@ export interface Tab {
 }
 
 interface Props {
-  tabs: Tab[];
-  activeTabId: string;
-  onSelectTab: (id: string) => void;
-  onCloseTab: (id: string) => void;
+  /** File tabs. The right panel no longer renders any; they live in the main pane. */
+  tabs?: Tab[];
+  activeTabId?: string;
+  onSelectTab?: (id: string) => void;
+  onCloseTab?: (id: string) => void;
   /** Pinned Explorer tab rendered after Notifications, before the file tabs (right-panel tab redesign). */
   explorerSelected?: boolean;
   onSelectExplorer?: () => void;
@@ -129,7 +130,7 @@ function PinnedTab({ id, panelId, label, title, icon, selected, badge, badgeColo
   );
 }
 
-export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, explorerSelected = false, onSelectExplorer, explorerBadge = 0, gitSelected = false, onSelectGit, gitBadge = 0, notificationsSelected = false, onSelectNotifications, notificationsBadge = 0, worktreesSelected = false, onSelectWorktrees, connectionSelected = false, onSelectConnection }: Props) {
+export function TabBar({ tabs = [], activeTabId = "", onSelectTab, onCloseTab, explorerSelected = false, onSelectExplorer, explorerBadge = 0, gitSelected = false, onSelectGit, gitBadge = 0, notificationsSelected = false, onSelectNotifications, notificationsBadge = 0, worktreesSelected = false, onSelectWorktrees, connectionSelected = false, onSelectConnection }: Props) {
   const { t } = useI18n();
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -150,7 +151,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, explorerSel
     else if (id === "connection") onSelectConnection?.();
     else {
       const tab = tabs.find((item) => item.id === id);
-      if (tab) onSelectTab(tab.id);
+      if (tab) onSelectTab?.(tab.id);
     }
   };
 
@@ -182,7 +183,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, explorerSel
       return;
     }
 
-    if ((event.key === "Delete" || event.key === "Backspace") && tabs.some((tab) => tab.id === id)) {
+    if ((event.key === "Delete" || event.key === "Backspace") && onCloseTab && tabs.some((tab) => tab.id === id)) {
       event.preventDefault();
       onCloseTab(id);
     }
@@ -296,7 +297,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, explorerSel
             key={tab.id}
             data-tab-id={tab.id}
             className="tabbar-tab ui-focus-ring"
-            onClick={() => onSelectTab(tab.id)}
+            onClick={() => onSelectTab?.(tab.id)}
             role="tab"
             tabIndex={isActive ? 0 : -1}
             aria-selected={isActive}
@@ -310,7 +311,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, explorerSel
               if (e.button !== 1) return;
               e.preventDefault();
               e.stopPropagation();
-              onCloseTab(tab.id);
+              onCloseTab?.(tab.id);
             }}
             style={{
               display: "flex",
@@ -364,7 +365,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, explorerSel
             </span>
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); onCloseTab(tab.id); }}
+              onClick={(e) => { e.stopPropagation(); onCloseTab?.(tab.id); }}
               tabIndex={isActive ? 0 : -1}
               onKeyDown={(event) => event.stopPropagation()}
               onMouseEnter={() => setHoveredClose(tab.id)}

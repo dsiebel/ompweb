@@ -55,6 +55,28 @@ export function loadRightPanelWidth(): number | null {
   }
 }
 
+// Main-pane tabs (chat + file viewers): the whole tab list, its order and the
+// active tab are per device, like the panel widths above. A corrupt blob is
+// dropped by the caller's validator, never thrown.
+export const MAIN_TABS_STORAGE_KEY = "omp-web:main-tabs:v1";
+
+export function loadMainTabsBlob(): unknown {
+  try {
+    const raw = window.localStorage.getItem(MAIN_TABS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveMainTabs(payload: string): void {
+  try {
+    window.localStorage.setItem(MAIN_TABS_STORAGE_KEY, payload);
+  } catch {
+    // ignore storage quota / privacy-mode errors
+  }
+}
+
 type WorkspaceStateKind = "loading" | "error" | "empty";
 
 export function WorkspaceState({

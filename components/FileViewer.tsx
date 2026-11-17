@@ -42,6 +42,9 @@ interface Props {
   onMentionLines?: (relativePath: string, startLine: number, endLine: number) => void;
   gitRefreshKey?: number;
   active?: boolean;
+  /** Controlled display mode (main-pane tabs); when set the viewer reports changes instead of owning them. */
+  displayMode?: DisplayMode;
+  onDisplayModeChange?: (mode: DisplayMode) => void;
 }
 
 interface FileData {
@@ -50,7 +53,7 @@ interface FileData {
   size: number;
 }
 
-type DisplayMode = "source" | "preview" | "diff";
+export type DisplayMode = "source" | "preview" | "diff";
 
 /** A web or other scheme URL (`https:`, `mailto:`, protocol-relative `//host`), as opposed to a local path. */
 const EXTERNAL_URL_RE = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
@@ -788,7 +791,7 @@ function DocumentViewer({ filePath, hostId, sourceSessionId, active = true }: Pr
   );
 }
 
-export function FileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, onMentionLines, gitRefreshKey, active = true }: Props) {
+export function FileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, onMentionLines, gitRefreshKey, active = true, displayMode, onDisplayModeChange }: Props) {
   if (isImagePath(filePath)) {
     return <ImageViewer hostId={hostId} filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} active={active} />;
   }
@@ -798,10 +801,10 @@ export function FileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile,
   if (isDocumentPreviewPath(filePath)) {
     return <DocumentViewer hostId={hostId} filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} active={active} />;
   }
-  return <TextFileViewer hostId={hostId} filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} onMentionLines={onMentionLines} gitRefreshKey={gitRefreshKey} active={active} />;
+  return <TextFileViewer hostId={hostId} filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} onMentionLines={onMentionLines} gitRefreshKey={gitRefreshKey} active={active} displayMode={displayMode} onDisplayModeChange={onDisplayModeChange} />;
 }
 
-function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, onMentionLines, gitRefreshKey, active = true }: Props) {
+function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, onMentionLines, gitRefreshKey, active = true, displayMode: controlledMode, onDisplayModeChange }: Props) {
   const { t } = useI18n();
   const { isDark } = useTheme();
   const [data, setData] = useState<FileData | null>(null);
@@ -822,7 +825,21 @@ function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, on
     }
     return () => { cancelled = true; };
   }, [data]);
-  const [displayMode, setDisplayMode] = useState<DisplayMode>("source");
+  const [internalMode, setInternalMode] = useState<DisplayMode>("source");
+  // Read only by the load effect, which must not re-run when the mode changes.
+  const controlledModeRef = useRef(controlledMode);
+  controlledModeRef.current = controlledMode;
+  // Controlled by the owning tab when `displayMode` is passed: the tab keeps
+  // the mode across tab switches and can request "diff" (Git changes list).
+  const displayMode = controlledMode ?? internalMode;
+  const setDisplayMode = useCallback((mode: DisplayMode) => {
+    if (controlledMode === undefined) setInternalMode(mode);
+    onDisplayModeChange?.(mode);
+  }, [controlledMode, onDisplayModeChange]);
+  // Effects that must not re-run when the owner re-renders (the load effect,
+  // the diff-availability guard) reach the setter through a ref.
+  const setDisplayModeRef = useRef(setDisplayMode);
+  setDisplayModeRef.current = setDisplayMode;
   const [wrapLines, setWrapLines] = useState(false);
   // Picked by the user when the extension maps to the wrong grammar or none; null = detected.
   const [languageOverride, setLanguageOverride] = useState<string | null>(null);
@@ -900,7 +917,7 @@ function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, on
     setError(null);
     setData(null);
     setGitDiff(null);
-    setDisplayMode("source");
+    if (controlledModeRef.current === undefined) setInternalMode("source");
     setWrapLines(false);
     setWatching(false);
 
@@ -909,7 +926,12 @@ function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, on
     let cancelled = false;
     void fetchContent(filePath).then((d) => {
       if (cancelled) return;
-      if (d?.language === "markdown") setDisplayMode("preview");
+      if (d?.language === "markdown") {
+        // Markdown opens in its preview; an explicit diff (Git changes list)
+        // is left alone, and the tab keeps the mode the viewer reports.
+        if (controlledModeRef.current === undefined) setInternalMode("preview");
+        else if (controlledModeRef.current === "source") setDisplayModeRef.current("preview");
+      }
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
@@ -939,7 +961,7 @@ function TextFileViewer({ filePath, hostId, cwd, sourceSessionId, onOpenFile, on
   const hasGitDiff = gitDiff?.supported === true && typeof gitDiff.patch === "string";
 
   useEffect(() => {
-    if (!hasGitDiff && displayMode === "diff") setDisplayMode("source");
+    if (!hasGitDiff && displayMode === "diff") setDisplayModeRef.current("source");
   }, [displayMode, hasGitDiff]);
 
   const parsedFrontmatter = useMemo(
