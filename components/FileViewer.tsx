@@ -64,6 +64,10 @@ const DISPLAY_MODE_LABEL_KEYS: Record<DisplayMode, string> = {
   diff: "fileViewer.modeDiff",
 };
 
+/** Distance from the line-number rail to code text; the diff's +/- column
+ * (minWidth) and the source line's padding both use it, so they cannot drift. */
+const CODE_TEXT_OFFSET = 16;
+
 const FILE_CODE_STYLE: CSSProperties = {
   fontFamily: "var(--font-mono)",
   fontSize: 13,
@@ -180,9 +184,8 @@ function SourceCodeRenderer({ rows, stylesheet, useInlineStyles, wrapLines }: So
         <span
           className="file-source-line-content"
           style={{
-            // Breathing room off the line-number rail (diff rows get the same
-            // distance from their +/- prefix column).
-            paddingLeft: 8,
+            // Same distance from the rail as a diff row's +/- column.
+            paddingLeft: CODE_TEXT_OFFSET,
             flex: "1 1 auto",
             minWidth: 0,
             overflowWrap: wrapLines ? "anywhere" : "normal",
@@ -403,7 +406,7 @@ export function DiffView({ patch }: { patch: string }) {
               </span>
               <span
                 style={{
-                  minWidth: 16,
+                  minWidth: CODE_TEXT_OFFSET,
                   padding: "0 6px",
                   color: prefixColor,
                   userSelect: "none",
