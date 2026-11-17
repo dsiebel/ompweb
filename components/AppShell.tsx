@@ -67,7 +67,7 @@ import { LocalDaemonBanner } from "./LocalDaemonBanner";
 import { hostName } from "./host-status";
 import { clearDraft } from "@/lib/draft-store";
 import { useNotifications } from "@/hooks/useNotifications";
-import { useRunningSessionIds } from "@/hooks/useRunningSessionIds";
+import { useSessionActivity } from "@/hooks/useSessionActivity";
 import {
   APP_UPDATE_COMPLETED_RELOAD_MS,
   APP_UPDATE_POLL_MS,
@@ -1097,6 +1097,27 @@ export function AppShell({ appName }: { appName: string }) {
   const mainTabsRef = useRef(mainTabs);
   mainTabsRef.current = mainTabs;
   const [mainTabsRestored, setMainTabsRestored] = useState(false);
+  // Live chat-tab status. A session that stops running counts as finished until
+  // its tab is activated again (the sidebar's "recently completed" moment), and
+  // an unread notification does the same from any device's point of view.
+  const sessionActivity = useSessionActivity();
+  const [finishedSessionIds, setFinishedSessionIds] = useState<ReadonlySet<string>>(() => new Set());
+  const previousRunningRef = useRef<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    const previous = previousRunningRef.current;
+    previousRunningRef.current = sessionActivity.running;
+    const finished = [...previous].filter((id) => !sessionActivity.running.has(id));
+    if (finished.length > 0) setFinishedSessionIds((current) => new Set([...current, ...finished]));
+  }, [sessionActivity.running]);
+  const clearTabAttention = useCallback((sessionId: string) => {
+    notificationHistory.markSessionRead([sessionId]);
+    setFinishedSessionIds((current) => {
+      if (!current.has(sessionId)) return current;
+      const next = new Set(current);
+      next.delete(sessionId);
+      return next;
+    });
+  }, []);
   // Read by handlers that must not act before the stored tabs are back.
   const mainTabsRestoredRef = useRef(mainTabsRestored);
   mainTabsRestoredRef.current = mainTabsRestored;
@@ -1354,7 +1375,7 @@ export function AppShell({ appName }: { appName: string }) {
     // re-select, notification click) must not bump sessionKey: that remounts
     // ChatWindow, reconnects SSE, and drops the mid-run streaming view.
     setSettingsTab(null);
-    notificationHistory.markSessionRead([session.id]);
+    clearTabAttention(session.id);
     // Every session selection is also the chat tab for that session: focus it,
     // opening it when the tab strip does not hold it yet.
     setMainTabs((prev) => {
@@ -1393,7 +1414,7 @@ export function AppShell({ appName }: { appName: string }) {
     if (!isRestore) {
       router.replace(sessionNavigationUrl(session));
     }
-  }, [router, isMobile, selectedSession, t]);
+  }, [router, isMobile, selectedSession, t, clearTabAttention]);
 
   const handleNewSession = useCallback((creationId: string, cwd: string | null, hostId?: string, project?: ManagedProject, initialization?: string) => {
     setSettingsTab(null);
@@ -1745,7 +1766,7 @@ export function AppShell({ appName }: { appName: string }) {
     if (isMobile) setSidebarOpen(false);
     if (isCompactOverlay) setRightPanelOpen(false);
     if (tab.kind !== "chat" || !tab.sessionId) return;
-    notificationHistory.markSessionRead([tab.sessionId]);
+    clearTabAttention(tab.sessionId);
     if (selectedSession && sameSessionTarget(selectedSession, { id: tab.sessionId, hostId: tab.hostId || undefined })) return;
     // Switching back to a chat tab selects its session again; a session that
     // vanished meanwhile (deleted elsewhere) drops its stale tab.
@@ -1754,7 +1775,7 @@ export function AppShell({ appName }: { appName: string }) {
       if (session) handleSelectSession(session);
       else setMainTabs((prev) => closeTab(prev, tabId));
     });
-  }, [isMobile, isCompactOverlay, selectedSession, fetchSessionForNavigation, handleSelectSession]);
+  }, [isMobile, isCompactOverlay, selectedSession, fetchSessionForNavigation, handleSelectSession, clearTabAttention]);
 
   const handleCloseMainTab = useCallback((tabId: string) => {
     setMainTabs((prev) => closeTab(prev, tabId));
@@ -1867,24 +1888,20 @@ export function AppShell({ appName }: { appName: string }) {
 
   const activeMainTab = findTab(mainTabs, mainTabs.activeTabId);
   const activeFileTab: FileMainTab | null = activeMainTab?.kind === "file" ? activeMainTab : null;
-  // Chat-tab status: a live dot while omp runs the session, and a badge for
-  // notifications this device has not seen yet (the same history the bell
-  // lists). Aliases keep an open tab of a moved session badged.
-  const runningSessionIds = useRunningSessionIds();
+  // Attention: a finished run (this device watched it stop) or an unread
+  // notification (a question, error or completion from any device). The open
+  // tab keeps the flag until it is activated again.
   const notificationEntries = useNotificationHistory();
-  // Unread notifications mean a finished turn, a question or an error. The
-  // open conversation never badges: seeing it is what clears it.
   const attentionSessionIds = useMemo(() => {
-    const ids = new Set<string>();
-    const viewed = settingsTab ? null : selectedSession?.id ?? null;
+    const ids = new Set<string>(finishedSessionIds);
     for (const entry of notificationEntries) {
-      if (entry.read || entry.event.sessionId === viewed) continue;
+      if (entry.read) continue;
       for (const id of [entry.event.sessionId, ...(entry.event.aliases ?? [])]) {
-        if (id && id !== viewed) ids.add(id);
+        if (id) ids.add(id);
       }
     }
     return ids;
-  }, [notificationEntries, selectedSession?.id, settingsTab]);
+  }, [notificationEntries, finishedSessionIds]);
   // Explorer, Git, and the file viewers follow the open session's folder, then
   // the sidebar's live cwd, then the new-session cwd. Relative paths (mention,
   // copy path) resolve against the same folder so they match the Explorer.
@@ -3117,7 +3134,8 @@ export function AppShell({ appName }: { appName: string }) {
             onSelectTab={handleSelectMainTab}
             onCloseTab={handleCloseMainTab}
             labelFor={mainTabLabel}
-            runningSessionIds={runningSessionIds}
+            runningSessionIds={sessionActivity.running}
+            awaitingInputSessionIds={sessionActivity.awaitingInput}
             attentionSessionIds={attentionSessionIds}
             fileActions={activeFileTab ? mainTabFileActions : undefined}
             chat={chatMainBody}

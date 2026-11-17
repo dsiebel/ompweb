@@ -88,6 +88,17 @@ export const notificationHistory = {
     change(entries.map((entry) => (entry.id === id ? { ...entry, read: true } : entry)));
     markRead([id]);
   },
+  /** Marks a conversation's entries read: opening its tab counts as seeing them. */
+  markSessionRead(sessionIds: string[]) {
+    const keys = new Set(sessionIds);
+    const unread = entries.filter((entry) => !entry.read && (
+      keys.has(entry.event.sessionId) || (entry.event.aliases ?? []).some((alias) => keys.has(alias))
+    )).map((entry) => entry.id);
+    if (unread.length === 0) return;
+    const ids = new Set(unread);
+    change(entries.map((entry) => (ids.has(entry.id) ? { ...entry, read: true } : entry)));
+    markRead(unread);
+  },
   /** Marks the entries this tab shows; ones that reached the server since stay unread. */
   markAllRead() {
     const unread = entries.filter((entry) => !entry.read).map((entry) => entry.id);

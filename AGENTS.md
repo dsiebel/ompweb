@@ -355,11 +355,13 @@ bunfig.toml           Bun dev-server bundling: tailwind plugin and the OMP_WEB_P
   connection); it no longer renders file contents or a diff preview, and `RightPanelView` has no
   `"file"` member. A row in `GitChangesPanel` opens (or switches) that file's `diff` tab on a
   single click, like the Explorer opens a file; each row also keeps its `@`-mention action.
-- Chat tabs carry status: `useRunningSessionIds` (`running` channel) shows a pulse dot while omp
-  runs that session; an unread notification (finished turn, question, error) makes the tab bold
-  with a static dot, cleared when it is opened (`notificationHistory.markSessionRead`; aliases
-  included, and the open conversation never flags). The strip only renders; the state lives in
-  `AppShell`.
+- Chat tabs replicate the sidebar's status: `useSessionActivity` (`running` channel) shows
+  `RunningSessionIndicator` (the rotating ring) while omp runs the session and
+  `MessageCircleQuestion` while it waits for an answer. A tab needs attention — bold title plus a
+  static accent dot — when a run this page watched stops (`finishedSessionIds`, the sidebar's
+  "recently completed" moment) or it has an unread notification; the flag stays on the open tab
+  until it is activated again (`clearTabAttention`: mark that conversation's notifications read
+  and drop the finished marker). The strip only renders; the state lives in `AppShell`.
 
 ### Adding an API route
 1. Create `app/api/<path>/route.ts` exporting `GET`/`POST`/`PUT`/`PATCH`/`DELETE` handlers (plain `Request` → `Response`; dynamic segments `[id]`, catch-all `[...path]`).

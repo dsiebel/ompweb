@@ -126,20 +126,22 @@ test("with nothing selected at all the chat keeps the onboarding screen", () => 
   assert.equal(screen.queryByTestId("empty"), null);
 });
 
-test("a running chat tab shows a live dot", () => {
+test("a running chat tab shows the sidebar's spinner, and a question icon while awaiting input", () => {
   render(React.createElement(MainTabs, {
     tabs: [tabs[0]],
     activeTabId: tabs[0].id,
     onSelectTab: () => {},
     onCloseTab: () => {},
     runningSessionIds: new Set(["s1"]),
+    awaitingInputSessionIds: new Set(["s1"]),
     chat: null,
     renderFile: () => null,
     empty: null,
   }));
   const tab = screen.getByRole("tab", { name: "First session" });
-  assert.ok(tab.querySelector(".live-status-dot.live-pulse"));
-  assert.equal(screen.getByTitle("Running") !== null, true);
+  assert.ok(tab.querySelector(".sidebar-running-spinner"));
+  assert.equal(screen.getByTitle("Agent running…") !== null, true);
+  assert.equal(screen.getByTitle("Waiting for your input") !== null, true);
 });
 
 test("a background tab with unread notifications is bold with a static dot", () => {
@@ -150,6 +152,7 @@ test("a background tab with unread notifications is bold with a static dot", () 
     onSelectTab: () => {},
     onCloseTab: () => {},
     runningSessionIds: new Set(),
+    awaitingInputSessionIds: new Set(),
     attentionSessionIds: new Set(["s2"]),
     chat: null,
     renderFile: () => null,
@@ -174,6 +177,7 @@ test("an idle, fully read session shows neither indicator", () => {
     onSelectTab: () => {},
     onCloseTab: () => {},
     runningSessionIds: new Set(),
+    awaitingInputSessionIds: new Set(),
     attentionSessionIds: new Set(),
     chat: null,
     renderFile: () => null,

@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
-import { MessageSquareText, X } from "lucide-react";
+import { MessageCircleQuestion, MessageSquareText, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { getFileIcon } from "./FileIcons";
+import { RunningSessionIndicator } from "./SessionSidebar-chrome";
 import type { FileMainTab, MainTab } from "./main-tabs";
 
 interface Props {
@@ -13,8 +14,10 @@ interface Props {
   onCloseTab: (id: string) => void;
   /** Tab label; chat tabs carry their own title, files their file name. */
   labelFor?: (tab: MainTab) => string;
-  /** Session ids omp is running now: their chat tab shows a live dot. */
+  /** Session ids omp is running now: their chat tab shows the sidebar's spinner. */
   runningSessionIds?: ReadonlySet<string>;
+  /** Running sessions blocked on a question: their chat tab shows the question icon. */
+  awaitingInputSessionIds?: ReadonlySet<string>;
   /**
    * Sessions with unread notifications (a finished turn, a question, an error):
    * their chat tab shows a static dot and a bold title until opened.
@@ -85,7 +88,7 @@ function paneStyle(active: boolean, flex: boolean): CSSProperties {
  * underline, close button) but keeps its own semantics: every tab here is
  * content, not a right-panel navigation view.
  */
-export function MainTabs({ tabs, activeTabId, onSelectTab, onCloseTab, labelFor, runningSessionIds, attentionSessionIds, fileActions, chat, renderFile, empty, showOnboarding = false }: Props) {
+export function MainTabs({ tabs, activeTabId, onSelectTab, onCloseTab, labelFor, runningSessionIds, awaitingInputSessionIds, attentionSessionIds, fileActions, chat, renderFile, empty, showOnboarding = false }: Props) {
   const { t } = useI18n();
   const listRef = useRef<HTMLDivElement>(null);
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
@@ -152,7 +155,8 @@ export function MainTabs({ tabs, activeTabId, onSelectTab, onCloseTab, labelFor,
             const label = tabTitle(tab, labelFor);
             // Needs attention (unread notification) unless it is the open tab:
             // the same dot as running, without the pulse, plus a bold title.
-            const attention = tab.kind === "chat" && Boolean(tab.sessionId) && !isActive && (attentionSessionIds?.has(tab.sessionId) ?? false);
+            const attention = tab.kind === "chat" && Boolean(tab.sessionId) && (attentionSessionIds?.has(tab.sessionId) ?? false);
+            const awaitingInput = tab.kind === "chat" && Boolean(tab.sessionId) && (awaitingInputSessionIds?.has(tab.sessionId) ?? false);
             // The close button names what the tab shows, not the file's path.
             const closeLabel = tab.kind === "file" ? tab.label : label;
             return (
@@ -218,12 +222,17 @@ export function MainTabs({ tabs, activeTabId, onSelectTab, onCloseTab, labelFor,
                   <Label tab={tab} labelFor={labelFor} />
                 </span>
                 {tab.kind === "chat" && tab.sessionId && runningSessionIds?.has(tab.sessionId) && (
+                  <RunningSessionIndicator size={13} />
+                )}
+                {awaitingInput && (
                   <span
-                    className="live-status-dot live-pulse"
-                    aria-label={t("mainTabs.running")}
-                    title={t("mainTabs.running")}
-                    style={{ flexShrink: 0, width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", position: "relative", display: "inline-block" }}
-                  />
+                    role="img"
+                    aria-label={t("sessionSidebar.awaitingInput")}
+                    title={t("sessionSidebar.awaitingInput")}
+                    style={{ flexShrink: 0, display: "inline-flex", color: "var(--accent)" }}
+                  >
+                    <MessageCircleQuestion size={12} strokeWidth={2.2} aria-hidden="true" />
+                  </span>
                 )}
                 {attention && (
                   <span
