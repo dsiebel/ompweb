@@ -2046,5 +2046,10 @@
   "modelsConfig.accountApiKey": "API 金鑰",
   "modelsConfig.disconnectAccount": "中斷連線 {label}",
   "modelsConfig.disconnectAccountTitle": "中斷帳號連線？",
-  "modelsConfig.disconnectAccountBody": "omp 將刪除 {label} 的已儲存憑證。此供應商的其他帳號仍會維持連線。"
+  "modelsConfig.disconnectAccountBody": "omp 將刪除 {label} 的已儲存憑證。此供應商的其他帳號仍會維持連線。",
+  "mainTabs.label": "主窗格分頁",
+  "mainTabs.close": "關閉",
+  "mainTabs.closeTab": "關閉 {label}",
+  "mainTabs.emptyTitle": "沒有開啟的分頁",
+  "mainTabs.emptyHint": "在側邊欄中選擇一個工作階段，或從檔案總管開啟檔案。"
 }

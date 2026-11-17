@@ -2006,5 +2006,10 @@
   "modelsConfig.accountApiKey": "APIキー",
   "modelsConfig.disconnectAccount": "{label} を切断",
   "modelsConfig.disconnectAccountTitle": "アカウントを切断しますか？",
-  "modelsConfig.disconnectAccountBody": "omp は {label} の保存済み資格情報を削除します。このプロバイダーの他のアカウントは接続されたままです。"
+  "modelsConfig.disconnectAccountBody": "omp は {label} の保存済み資格情報を削除します。このプロバイダーの他のアカウントは接続されたままです。",
+  "mainTabs.label": "メインペーンのタブ",
+  "mainTabs.close": "閉じる",
+  "mainTabs.closeTab": "{label} を閉じる",
+  "mainTabs.emptyTitle": "開いているタブはありません",
+  "mainTabs.emptyHint": "サイドバーでセッションを選ぶか、エクスプローラーからファイルを開いてください。"
 }
