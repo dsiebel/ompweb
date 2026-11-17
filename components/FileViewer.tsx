@@ -180,6 +180,9 @@ function SourceCodeRenderer({ rows, stylesheet, useInlineStyles, wrapLines }: So
         <span
           className="file-source-line-content"
           style={{
+            // Breathing room off the line-number rail (diff rows get the same
+            // distance from their +/- prefix column).
+            paddingLeft: 8,
             flex: "1 1 auto",
             minWidth: 0,
             overflowWrap: wrapLines ? "anywhere" : "normal",

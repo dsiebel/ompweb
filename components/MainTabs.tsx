@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { MessageSquareText, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { getFileIcon } from "./FileIcons";
@@ -58,6 +58,18 @@ function tabTitle(tab: MainTab, labelFor?: (tab: MainTab) => string): string {
     case "file":
       return tab.path;
   }
+}
+
+/**
+ * One tab body. Inactive panes stay laid out (visibility, not display) so their
+ * scroll position survives a switch; `display: none` would reset it, which
+ * reads as a reload even though the DOM is kept.
+ */
+function paneStyle(active: boolean, flex: boolean): CSSProperties {
+  const base: CSSProperties = { height: "100%", minHeight: 0, display: flex ? "flex" : "block", flexDirection: "column" };
+  return active
+    ? { ...base, position: "relative" }
+    : { ...base, position: "absolute", inset: 0, visibility: "hidden", pointerEvents: "none" };
 }
 
 /**
@@ -230,11 +242,11 @@ export function MainTabs({ tabs, activeTabId, onSelectTab, onCloseTab, labelFor,
           ? (showOnboarding ? chat : empty)
           : (
             <>
-              <div aria-hidden={active.kind !== "chat"} style={{ display: active.kind === "chat" ? "flex" : "none", flexDirection: "column", height: "100%", minHeight: 0 }}>{chat}</div>
+              <div aria-hidden={active.kind !== "chat"} style={paneStyle(active.kind === "chat", true)}>{chat}</div>
               {tabs.filter((tab): tab is FileMainTab => tab.kind === "file").map((tab) => {
                 const isActive = tab.id === activeTabId;
                 return (
-                  <div key={tab.id} aria-hidden={!isActive} style={{ display: isActive ? "block" : "none", height: "100%", minHeight: 0 }}>
+                  <div key={tab.id} aria-hidden={!isActive} style={paneStyle(isActive, false)}>
                     {renderFile(tab, isActive)}
                   </div>
                 );
