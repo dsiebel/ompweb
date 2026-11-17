@@ -278,9 +278,11 @@ components/
   PluginsConfig.tsx   modal for installed plugins
   SkillsConfig.tsx    modal for loaded/search/installable skills
   FileExplorer.tsx    file tree inside sidebar
-  FileViewer.tsx      file content in a tab
+  FileViewer.tsx      file content in a main-pane tab (source/preview/diff)
+  MainTabs.tsx        main-pane tab strip and active-tab body (chat + file tabs)
+  main-tabs.ts        pure main-pane tab reducer: open/close/activate/restore/persist
   GhostMirror.tsx     textarea overlay painting ghost-text word completion
-  TabBar.tsx          tab bar (Chat + open file tabs)
+  TabBar.tsx          right-panel pinned-tab bar (navigation only; file tabs are optional and unused)
   WorktreesPanel.tsx  file-panel Worktrees tab: list/switch/create/remove the active repo's worktrees
   ui/                 shared primitives: Dialog/Tooltip/Collapsible, fields, toast
 
@@ -323,6 +325,27 @@ bunfig.toml           Bun dev-server bundling: tailwind plugin and the OMP_WEB_P
 ---
 
 ## Key Design Decisions & Traps
+
+### Main-pane tabs (`components/main-tabs.ts`, `components/MainTabs.tsx`)
+- The main pane is a tab workspace: a `chat` tab per session id (`chat:new` is the transient
+  composer, never persisted) and a `file` tab per `(hostId, path)`. `components/main-tabs.ts`
+  is the pure reducer (open/dedupe/close/activate/mode/restore/serialize); `AppShell` holds the
+  state and `MainTabs` renders the strip and the active tab's body. Only the active tab's body
+  is mounted, except that the chat stays mounted (hidden) behind an active file tab so its
+  stream, draft and `@`-mention inserts survive tab switches.
+- Every session selection (sidebar, palette, notification, history navigation, initial restore)
+  goes through `handleSelectSession`, which also focuses/opens the session's chat tab. Creating,
+  moving and deleting a session keeps its tab in step.
+- Opening a file goes through one `handleOpenFile(path, name, source, mode)`; the Explorer and
+  chat links ask for `source`, `GitChangesPanel` for `diff`, and the same `(hostId, path)` tab is
+  reused and switched rather than duplicated. `FileViewer` takes an optional controlled
+  `displayMode`/`onDisplayModeChange` so the tab owns the mode.
+- Tabs, order and the active tab persist per device in `localStorage["omp-web:main-tabs:v1"]`
+  (`AppShell-layout.tsx` read/write, debounced). Restore validates each chat tab against
+  `/api/sessions` and each file tab with `GET /api/files/<path>?type=meta`; a missing one is
+  dropped, and a corrupt blob degrades to fewer tabs. A failed lookup keeps the tab.
+- The right panel is navigation only (Explorer, Git changes, notifications, worktrees,
+  connection); it no longer renders file contents, and `RightPanelView` has no `"file"` member.
 
 ### Adding an API route
 1. Create `app/api/<path>/route.ts` exporting `GET`/`POST`/`PUT`/`PATCH`/`DELETE` handlers (plain `Request` → `Response`; dynamic segments `[id]`, catch-all `[...path]`).
