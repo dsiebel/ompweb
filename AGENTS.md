@@ -330,9 +330,14 @@ bunfig.toml           Bun dev-server bundling: tailwind plugin and the OMP_WEB_P
 - The main pane is a tab workspace: a `chat` tab per session id (`chat:new` is the transient
   composer, never persisted) and a `file` tab per `(hostId, path)`. `components/main-tabs.ts`
   is the pure reducer (open/dedupe/close/activate/mode/restore/serialize); `AppShell` holds the
-  state and `MainTabs` renders the strip and the active tab's body. Only the active tab's body
-  is mounted, except that the chat stays mounted (hidden) behind an active file tab so its
-  stream, draft and `@`-mention inserts survive tab switches.
+  state and `MainTabs` renders the strip and the active tab's body.
+- Every open tab stays mounted; inactive ones are hidden (`display: none`, `aria-hidden`), so a
+  tab switch keeps a file's rendered content, scroll and mode, and the chat keeps its stream,
+  draft and `@`-mention inserts. Only the active chat connects (one chat tab per session), and a
+  file tab loads nothing until it is first shown (`FileViewer` gates its initial read on
+  `active`, once per file). Coming back attaches the file watch without clearing anything: the
+  watch's new-epoch change frame refreshes only when the reported size differs. Same-size edits
+  made while a tab was hidden are therefore not noticed until another change arrives.
 - Every session selection (sidebar, palette, notification, history navigation, initial restore)
   goes through `handleSelectSession`, which also focuses/opens the session's chat tab. Creating,
   moving and deleting a session keeps its tab in step.
@@ -342,10 +347,14 @@ bunfig.toml           Bun dev-server bundling: tailwind plugin and the OMP_WEB_P
   `displayMode`/`onDisplayModeChange` so the tab owns the mode.
 - Tabs, order and the active tab persist per device in `localStorage["omp-web:main-tabs:v1"]`
   (`AppShell-layout.tsx` read/write, debounced). Restore validates each chat tab against
-  `/api/sessions` and each file tab with `GET /api/files/<path>?type=meta`; a missing one is
-  dropped, and a corrupt blob degrades to fewer tabs. A failed lookup keeps the tab.
+  `/api/sessions` and each file tab with `GET /api/files/<path>?type=meta`; a `404` drops it
+  (a file tab opened inside a session is also gone when that session is: its grant went with it),
+  any other failure keeps it, and a corrupt blob degrades to fewer tabs. Restore keeps the stored
+  tab order and active tab; tabs opened during the validation are appended after it.
 - The right panel is navigation only (Explorer, Git changes, notifications, worktrees,
-  connection); it no longer renders file contents, and `RightPanelView` has no `"file"` member.
+  connection); it no longer renders file contents or a diff preview, and `RightPanelView` has no
+  `"file"` member. A row in `GitChangesPanel` opens (or switches) that file's `diff` tab on a
+  single click, like the Explorer opens a file; each row also keeps its `@`-mention action.
 
 ### Adding an API route
 1. Create `app/api/<path>/route.ts` exporting `GET`/`POST`/`PUT`/`PATCH`/`DELETE` handlers (plain `Request` → `Response`; dynamic segments `[id]`, catch-all `[...path]`).
