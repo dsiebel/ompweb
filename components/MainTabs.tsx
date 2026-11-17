@@ -13,6 +13,10 @@ interface Props {
   onCloseTab: (id: string) => void;
   /** Tab label; chat tabs carry their own title, files their file name. */
   labelFor?: (tab: MainTab) => string;
+  /** Session ids omp is running now: their chat tab shows a live dot. */
+  runningSessionIds?: ReadonlySet<string>;
+  /** Unread notifications per session id: the chat tab shows an attention badge. */
+  attentionCounts?: ReadonlyMap<string, number>;
   /** Toolbar for the active file tab (mention, copy, download, close all...). */
   fileActions?: ReactNode;
   /**
@@ -78,7 +82,7 @@ function paneStyle(active: boolean, flex: boolean): CSSProperties {
  * underline, close button) but keeps its own semantics: every tab here is
  * content, not a right-panel navigation view.
  */
-export function MainTabs({ tabs, activeTabId, onSelectTab, onCloseTab, labelFor, fileActions, chat, renderFile, empty, showOnboarding = false }: Props) {
+export function MainTabs({ tabs, activeTabId, onSelectTab, onCloseTab, labelFor, runningSessionIds, attentionCounts, fileActions, chat, renderFile, empty, showOnboarding = false }: Props) {
   const { t } = useI18n();
   const listRef = useRef<HTMLDivElement>(null);
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
@@ -207,6 +211,36 @@ export function MainTabs({ tabs, activeTabId, onSelectTab, onCloseTab, labelFor,
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", flex: 1, fontWeight: isActive ? 500 : 400 }}>
                   <Label tab={tab} labelFor={labelFor} />
                 </span>
+                {tab.kind === "chat" && tab.sessionId && runningSessionIds?.has(tab.sessionId) && (
+                  <span
+                    className="live-status-dot live-pulse"
+                    aria-label={t("mainTabs.running")}
+                    title={t("mainTabs.running")}
+                    style={{ flexShrink: 0, width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", position: "relative", display: "inline-block" }}
+                  />
+                )}
+                {tab.kind === "chat" && tab.sessionId && (attentionCounts?.get(tab.sessionId) ?? 0) > 0 && (
+                  <span
+                    aria-label={t("mainTabs.attention")}
+                    title={t("mainTabs.attention")}
+                    style={{
+                      flexShrink: 0,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      minWidth: 16,
+                      height: 15,
+                      padding: "0 4px",
+                      borderRadius: 8,
+                      background: "color-mix(in srgb, var(--status-warning) 20%, transparent)",
+                      color: "var(--status-warning)",
+                      fontSize: 10,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {(attentionCounts?.get(tab.sessionId) ?? 0) > 99 ? "99+" : attentionCounts?.get(tab.sessionId)}
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={(event) => { event.stopPropagation(); onCloseTab(tab.id); }}

@@ -14,7 +14,7 @@ import type { SearchMatchTarget } from "./SessionSearchMatches";
 import type { WorktreeContext } from "./SessionSidebar-helpers";
 import { ToastProvider } from "./ui/toast";
 import { toast } from "./ui/toast";
-import { notificationHistory, useUnreadNotificationCount } from "@/lib/notification-history";
+import { notificationHistory, useNotificationHistory, useUnreadNotificationCount } from "@/lib/notification-history";
 import { ConfirmDialog } from "./ui/field";
 import { ThemedSelect } from "./ui/primitives";
 import { ChatWindow } from "./ChatWindow";
@@ -67,6 +67,7 @@ import { LocalDaemonBanner } from "./LocalDaemonBanner";
 import { hostName } from "./host-status";
 import { clearDraft } from "@/lib/draft-store";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useRunningSessionIds } from "@/hooks/useRunningSessionIds";
 import {
   APP_UPDATE_COMPLETED_RELOAD_MS,
   APP_UPDATE_POLL_MS,
@@ -1864,6 +1865,21 @@ export function AppShell({ appName }: { appName: string }) {
 
   const activeMainTab = findTab(mainTabs, mainTabs.activeTabId);
   const activeFileTab: FileMainTab | null = activeMainTab?.kind === "file" ? activeMainTab : null;
+  // Chat-tab status: a live dot while omp runs the session, and a badge for
+  // notifications this device has not seen yet (the same history the bell
+  // lists). Aliases keep an open tab of a moved session badged.
+  const runningSessionIds = useRunningSessionIds();
+  const notificationEntries = useNotificationHistory();
+  const attentionCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const entry of notificationEntries) {
+      if (entry.read) continue;
+      for (const id of [entry.event.sessionId, ...(entry.event.aliases ?? [])]) {
+        if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [notificationEntries]);
   // Explorer, Git, and the file viewers follow the open session's folder, then
   // the sidebar's live cwd, then the new-session cwd. Relative paths (mention,
   // copy path) resolve against the same folder so they match the Explorer.
@@ -3096,6 +3112,8 @@ export function AppShell({ appName }: { appName: string }) {
             onSelectTab={handleSelectMainTab}
             onCloseTab={handleCloseMainTab}
             labelFor={mainTabLabel}
+            runningSessionIds={runningSessionIds}
+            attentionCounts={attentionCounts}
             fileActions={activeFileTab ? mainTabFileActions : undefined}
             chat={chatMainBody}
             showOnboarding={!showChat}

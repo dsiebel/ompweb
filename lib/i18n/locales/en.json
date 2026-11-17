@@ -2051,5 +2051,7 @@
   "mainTabs.close": "Close",
   "mainTabs.closeTab": "Close {label}",
   "mainTabs.emptyTitle": "No tab open",
-  "mainTabs.emptyHint": "Pick a session in the sidebar, or open a file from the Explorer."
+  "mainTabs.emptyHint": "Pick a session in the sidebar, or open a file from the Explorer.",
+  "mainTabs.running": "Running",
+  "mainTabs.attention": "Needs your attention"
 }

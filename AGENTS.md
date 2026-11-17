@@ -355,6 +355,10 @@ bunfig.toml           Bun dev-server bundling: tailwind plugin and the OMP_WEB_P
   connection); it no longer renders file contents or a diff preview, and `RightPanelView` has no
   `"file"` member. A row in `GitChangesPanel` opens (or switches) that file's `diff` tab on a
   single click, like the Explorer opens a file; each row also keeps its `@`-mention action.
+- Chat tabs carry status: `useRunningSessionIds` (`running` channel) shows a pulse dot while omp
+  runs that session, and the unread notification history flags a tab needing attention (aliases
+  included, so a tab of a moved session stays badged). The strip only renders; the state lives in
+  `AppShell`.
 
 ### Adding an API route
 1. Create `app/api/<path>/route.ts` exporting `GET`/`POST`/`PUT`/`PATCH`/`DELETE` handlers (plain `Request` → `Response`; dynamic segments `[id]`, catch-all `[...path]`).

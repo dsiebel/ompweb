@@ -2051,5 +2051,7 @@
   "mainTabs.close": "關閉",
   "mainTabs.closeTab": "關閉 {label}",
   "mainTabs.emptyTitle": "沒有開啟的分頁",
-  "mainTabs.emptyHint": "在側邊欄中選擇一個工作階段，或從檔案總管開啟檔案。"
+  "mainTabs.emptyHint": "在側邊欄中選擇一個工作階段，或從檔案總管開啟檔案。",
+  "mainTabs.running": "執行中",
+  "mainTabs.attention": "需要你的關注"
 }

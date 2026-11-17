@@ -125,3 +125,37 @@ test("with nothing selected at all the chat keeps the onboarding screen", () => 
   assert.ok(screen.getByTestId("chat"));
   assert.equal(screen.queryByTestId("empty"), null);
 });
+
+test("a running chat tab shows a live dot and unread attention count", () => {
+  render(React.createElement(MainTabs, {
+    tabs: [tabs[0]],
+    activeTabId: tabs[0].id,
+    onSelectTab: () => {},
+    onCloseTab: () => {},
+    runningSessionIds: new Set(["s1"]),
+    attentionCounts: new Map([["s1", 3]]),
+    chat: null,
+    renderFile: () => null,
+    empty: null,
+  }));
+  const tab = screen.getByRole("tab", { name: "First session" });
+  assert.ok(tab.querySelector(".live-status-dot"));
+  assert.equal(screen.getByTitle("Running") !== null, true);
+  assert.equal(screen.getByTitle("Needs your attention").textContent, "3");
+});
+
+test("an idle, read session shows neither indicator", () => {
+  render(React.createElement(MainTabs, {
+    tabs: [tabs[0]],
+    activeTabId: tabs[0].id,
+    onSelectTab: () => {},
+    onCloseTab: () => {},
+    runningSessionIds: new Set(),
+    attentionCounts: new Map(),
+    chat: null,
+    renderFile: () => null,
+    empty: null,
+  }));
+  assert.equal(document.querySelector(".live-status-dot"), null);
+  assert.equal(screen.queryByTitle("Needs your attention"), null);
+});

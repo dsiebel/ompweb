@@ -2011,5 +2011,7 @@
   "mainTabs.close": "关闭",
   "mainTabs.closeTab": "关闭 {label}",
   "mainTabs.emptyTitle": "没有打开的标签页",
-  "mainTabs.emptyHint": "在侧边栏中选择一个会话，或从资源管理器中打开文件。"
+  "mainTabs.emptyHint": "在侧边栏中选择一个会话，或从资源管理器中打开文件。",
+  "mainTabs.running": "运行中",
+  "mainTabs.attention": "需要你的关注"
 }

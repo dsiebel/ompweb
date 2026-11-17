@@ -2011,5 +2011,7 @@
   "mainTabs.close": "閉じる",
   "mainTabs.closeTab": "{label} を閉じる",
   "mainTabs.emptyTitle": "開いているタブはありません",
-  "mainTabs.emptyHint": "サイドバーでセッションを選ぶか、エクスプローラーからファイルを開いてください。"
+  "mainTabs.emptyHint": "サイドバーでセッションを選ぶか、エクスプローラーからファイルを開いてください。",
+  "mainTabs.running": "実行中",
+  "mainTabs.attention": "確認が必要です"
 }
